@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>校园表情包工坊</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c23; --panel2:#1e242d; --line:#2a323d;
+    --txt:#e6ebf2; --dim:#8b97a6; --accent:#4c8dff; --ok:#3ecf8e; --err:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  header{
+    padding:18px 24px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  }
+  header h1{margin:0; font-size:17px; font-weight:600}
+  header .sub{color:var(--dim); font-size:12px}
+  .wrap{
+    display:grid; grid-template-columns:340px 1fr; gap:20px;
+    padding:20px 24px; align-items:start; max-width:1180px; margin:0 auto;
+  }
+  @media (max-width:860px){ .wrap{grid-template-columns:1fr} }
+  .panel{
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:16px;
+  }
+  .panel h2{
+    margin:0 0 14px; font-size:13px; font-weight:600;
+    color:var(--dim); letter-spacing:.05em;
+  }
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:12px; color:var(--dim); margin-bottom:6px}
+  input[type=text], textarea, select{
+    width:100%; background:var(--panel2); color:var(--txt);
+    border:1px solid var(--line); border-radius:7px;
+    padding:9px 10px; font:inherit; font-size:13px; outline:none;
+  }
+  input[type=text]:focus, textarea:focus, select:focus{border-color:var(--accent)}
+  textarea{resize:vertical; min-height:56px}
+  input[type=range]{width:100%; accent-color:var(--accent)}
+  input[type=color]{
+    width:100%; height:34px; background:var(--panel2);
+    border:1px solid var(--line); border-radius:7px; padding:2px; cursor:pointer;
+  }
+  .row{display:flex; gap:10px}
+  .row > *{flex:1}
+  .val{float:right; color:var(--accent); font-variant-numeric:tabular-nums}
+
+  /* 底板选择 */
+  .boards{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+  .board{
+    aspect-ratio:1; border-radius:8px; border:2px solid var(--line);
+    cursor:pointer; overflow:hidden; position:relative; padding:0; background:none;
+  }
+  .board.on{border-color:var(--accent)}
+  .board canvas{width:100%; height:100%; display:block}
+  .board span{
+    position:absolute; left:0; right:0; bottom:0; font-size:10px;
+    background:rgba(0,0,0,.55); color:#fff; padding:2px 0; text-align:center;
+  }
+
+  /* 预览区 */
+  .stage{
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:20px;
+    display:flex; flex-direction:column; align-items:center; gap:16px;
+  }
+  #preview{
+    width:min(420px,100%); aspect-ratio:1; border-radius:8px;
+    box-shadow:0 8px 30px rgba(0,0,0,.45); display:block;
+  }
+  .actions{display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
+  button.act{
+    background:var(--accent); color:#fff; border:0; border-radius:8px;
+    padding:10px 20px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  button.act:hover{filter:brightness(1.1)}
+  button.act.ghost{background:var(--panel2); border:1px solid var(--line); color:var(--txt)}
+  .info{
+    font-size:12px; color:var(--dim); text-align:center;
+    min-height:20px; font-variant-numeric:tabular-nums;
+  }
+  .info.ok{color:var(--ok)} .info.err{color:var(--err)}
+  .hint{font-size:11px; color:var(--dim); line-height:1.7; margin-top:10px}
+  code{background:var(--panel2); padding:1px 5px; border-radius:4px; font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>校园表情包工坊</h1>
+  <span class="sub">选底板 · 敲文案 · 导出 JPEG — 纯本地运行，不上传任何数据</span>
+</header>
+
+<div class="wrap">
+
+  <!-- 左侧控制面板 -->
+  <div class="panel">
+    <h2>1. 选底板</h2>
+    <div class="boards" id="boards"></div>
+
+    <h2 style="margin-top:18px">2. 写文案</h2>
+    <div class="field">
+      <label>主文案</label>
+      <textarea id="main" maxlength="40" placeholder="例如：早八人已上线">早八人已上线</textarea>
+    </div>
+    <div class="field">
+      <label>副文案（可留空）</label>
+      <textarea id="sub" maxlength="40" placeholder="例如：人是铁 饭是钢"></textarea>
+    </div>
+
+    <h2 style="margin-top:18px">3. 调样式</h2>
+    <div class="field">
+      <label>字号 <span class="val" id="sizeVal">72</span></label>
+      <input type="range" id="size" min="24" max="120" value="72">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>主文案颜色</label>
+        <input type="color" id="mainColor" value="#ffffff">
+      </div>
+      <div class="field">
+        <label>副文案颜色</label>
+        <input type="color" id="subColor" value="#ffffff">
+      </div>
+    </div>
+    <div class="field">
+      <label>垂直位置 <span class="val" id="posVal">50</span></label>
+      <input type="range" id="pos" min="10" max="90" value="50">
+    </div>
+    <div class="field">
+      <label>文字描边（深色底图建议开启）</label>
+      <select id="stroke">
+        <option value="1">开启</option>
+        <option value="0">关闭</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 右侧预览 -->
+  <div class="stage">
+    <canvas id="preview" width="600" height="600"></canvas>
+    <div class="actions">
+      <button class="act" id="export">导出 JPEG</button>
+      <button class="act ghost" id="next">连做下一张</button>
+    </div>
+    <div class="info" id="info">改任意参数即可看到效果</div>
+    <div class="hint">
+      导出为 <code>JPEG</code>，符合「图片 < 10MB」的提交要求；连续导出会自动编号
+      <code>pack_01.jpg</code>、<code>pack_02.jpg</code>…<br>
+      底板由 Canvas 代码绘制，不含任何外部图片，可放心商用/投稿。
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const SIZE = 600;          // 导出尺寸，600x600 足够表情包使用
+  const MAX_BYTES = 10 * 1024 * 1024;
+
+  const preview = document.getElementById('preview');
+  const ctx = preview.getContext('2d');
+  const info = document.getElementById('info');
+
+  // ---------- 底板定义：全部用 Canvas 代码画，零外部素材 ----------
+  const BOARDS = [
+    {
+      id: 'sunrise', name: '早八橙',
+      draw(g) {
+        const grd = g.createLinearGradient(0, 0, 0, SIZE);
+        grd.addColorStop(0, '#ff9a56'); grd.addColorStop(1, '#e8523f');
+        g.fillStyle = grd; g.fillRect(0, 0, SIZE, SIZE);
+        g.globalAlpha = .18; g.fillStyle = '#fff';
+        g.beginPath(); g.arc(430, 140, 96, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = 1;
+      }
+    },
+    {
+      id: 'navy', name: '深夜蓝',
+      draw(g) {
+        const grd = g.createLinearGradient(0, 0, SIZE, SIZE);
+        grd.addColorStop(0, '#1b2a4a'); grd.addColorStop(1, '#0b1220');
+        g.fillStyle = grd; g.fillRect(0, 0, SIZE, SIZE);
+        g.globalAlpha = .22; g.fillStyle = '#7aa2ff';
+        for (let i = 0; i < 26; i++) {
+          const x = (i * 97) % SIZE, y = (i * 173) % SIZE;
+          g.beginPath(); g.arc(x, y, 2.2, 0, Math.PI * 2); g.fill();
+        }
+        g.globalAlpha = 1;
+      }
+    },
+    {
+      id: 'mint', name: '薄荷绿',
+      draw(g) {
+        g.fillStyle = '#d9f5e6'; g.fillRect(0, 0, SIZE, SIZE);
+        g.globalAlpha = .5; g.fillStyle = '#3ecf8e';
+        g.beginPath(); g.arc(150, 470, 180, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = .28; g.fillStyle = '#1fa06a';
+        g.beginPath(); g.arc(470, 120, 140, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = 1;
+      }
+    },
+    {
+      id: 'grid', name: '草稿纸',
+      draw(g) {
+        g.fillStyle = '#fdfcf7'; g.fillRect(0, 0, SIZE, SIZE);
+        g.strokeStyle = '#dfe6ef'; g.lineWidth = 1;
+        for (let v = 40; v < SIZE; v += 40) {
+          g.beginPath(); g.moveTo(v, 0); g.lineTo(v, SIZE); g.stroke();
+          g.beginPath(); g.moveTo(0, v); g.lineTo(SIZE, v); g.stroke();
+        }
+        g.strokeStyle = '#ffb3b3'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(80, 0); g.lineTo(80, SIZE); g.stroke();
+      }
+    },
+    {
+      id: 'ink', name: '水墨黑',
+      draw(g) {
+        g.fillStyle = '#12161c'; g.fillRect(0, 0, SIZE, SIZE);
+        g.globalAlpha = .3; g.fillStyle = '#3b4756';
+        g.beginPath(); g.arc(300, 300, 220, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = 1;
+      }
+    },
+    {
+      id: 'candy', name: '糖果粉',
+      draw(g) {
+        const grd = g.createLinearGradient(0, 0, SIZE, SIZE);
+        grd.addColorStop(0, '#ffd1e3'); grd.addColorStop(1, '#c9b6ff');
+        g.fillStyle = grd; g.fillRect(0, 0, SIZE, SIZE);
+        g.globalAlpha = .55;
+        ['#ff9ec4', '#b39bff', '#8fd8ff'].forEach((c, i) => {
+          g.fillStyle = c;
+          g.beginPath();
+          g.arc(140 + i * 170, 160 + (i % 2) * 260, 110, 0, Math.PI * 2);
+          g.fill();
+        });
+        g.globalAlpha = 1;
+      }
+    },
+  ];
+
+  // ---------- 状态 ----------
+  const state = {
+    board: BOARDS[0].id,
+    main: '早八人已上线',
+    sub: '',
+    size: 72,
+    mainColor: '#ffffff',
+    subColor: '#ffffff',
+    pos: 50,
+    stroke: true,
+    seq: 1,          // 连做编号
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- 文字换行（按像素宽度折行） ----------
+  function wrap(g, text, maxW) {
+    const lines = [];
+    for (const para of String(text).split('\n')) {
+      let line = '';
+      for (const ch of para) {
+        if (g.measureText(line + ch).width > maxW && line) {
+          lines.push(line); line = ch;
+        } else {
+          line += ch;
+        }
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
+
+  function drawText(g, text, cx, topY, maxW, size, color, stroke) {
+    g.font = `700 ${size}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    const lines = wrap(g, text, maxW);
+    const lh = size * 1.25;
+    lines.forEach((ln, i) => {
+      const y = topY + i * lh;
+      if (stroke) {
+        g.lineWidth = Math.max(4, size * 0.09);
+        g.strokeStyle = 'rgba(0,0,0,.72)';
+        g.lineJoin = 'round';
+        g.strokeText(ln, cx, y);
+      }
+      g.fillStyle = color;
+      g.fillText(ln, cx, y);
+    });
+    return lines.length * lh;
+  }
+
+  // ---------- 主绘制 ----------
+  function draw(target, scale) {
+    const g = target.getContext('2d');
+    const S = SIZE * scale;
+    g.setTransform(scale, 0, 0, scale, 0, 0);
+    g.clearRect(0, 0, SIZE, SIZE);
+
+    const board = BOARDS.find(b => b.id === state.board) || BOARDS[0];
+    board.draw(g);
+
+    const cx = SIZE / 2;
+    const maxW = SIZE * 0.82;
+    const baseY = SIZE * (state.pos / 100);
+
+    // 主文案
+    const mainH = drawText(
+      g, state.main, cx, baseY - state.size * 0.7, maxW,
+      state.size, state.mainColor, state.stroke
+    );
+
+    // 副文案：主文案下方，字号取 55%
+    if (state.sub.trim()) {
+      drawText(
+        g, state.sub, cx, baseY - state.size * 0.7 + mainH + state.size * 0.15,
+        maxW, Math.round(state.size * 0.55), state.subColor, state.stroke
+      );
+    }
+  }
+
+  // ---------- 底板缩略图 ----------
+  function renderBoards() {
+    const box = $('boards');
+    box.innerHTML = '';
+    BOARDS.forEach(b => {
+      const el = document.createElement('button');
+      el.className = 'board' + (b.id === state.board ? ' on' : '');
+      el.title = b.name;
+      const c = document.createElement('canvas');
+      c.width = c.height = 160;
+      b.draw(c.getContext('2d'));
+      el.appendChild(c);
+      const s = document.createElement('span');
+      s.textContent = b.name;
+      el.appendChild(s);
+      el.onclick = () => {
+        state.board = b.id;
+        autoStrokeHint();
+        syncFromUI();
+        renderBoards();
+        render();
+      };
+      box.appendChild(el);
+    });
+  }
+
+  // ---------- 渲染 + 状态回写 ----------
+  function render() {
+    draw(preview, 1);
+    const est = Math.round(SIZE * SIZE * 0.35);
+    info.className = 'info';
+    info.textContent = `预览 ${SIZE}×${SIZE} · 预计约 ${(est / 1024).toFixed(0)} KB`;
+  }
+
+  function syncFromUI() {
+    state.main = $('main').value;
+    state.sub = $('sub').value;
+    state.size = +$('size').value;
+    state.mainColor = $('mainColor').value;
+    state.subColor = $('subColor').value;
+    state.pos = +$('pos').value;
+    state.stroke = $('stroke').value === '1';
+    $('sizeVal').textContent = state.size;
+    $('posVal').textContent = state.pos;
+  }
+
+  // 亮底/暗底：决定文案默认用深色还是浅色
+  const LIGHT_BOARDS = ['mint', 'grid', 'candy'];
+
+  // 自动根据底板明暗切换文案颜色与描边
+  function autoStrokeHint() {
+    const light = LIGHT_BOARDS.includes(state.board);
+    $('stroke').value = light ? '0' : '1';
+    state.mainColor = light ? '#1b2430' : '#ffffff';
+    state.subColor = light ? '#1b2430' : '#ffffff';
+    state.stroke = !light;
+    $('mainColor').value = state.mainColor;
+    $('subColor').value = state.subColor;
+  }
+
+  // ---------- 导出 ----------
+  function exportJpeg() {
+    const c = document.createElement('canvas');
+    c.width = c.height = SIZE;
+    draw(c, 1);
+    const url = c.toDataURL('image/jpeg', 0.92);
+    const b64 = url.split(',')[1] || '';
+    const bytes = Math.round(b64.length * 3 / 4);
+
+    if (bytes > MAX_BYTES) {
+      info.className = 'info err';
+      info.textContent = `导出失败：${(bytes / 1048576).toFixed(1)}MB，超出 10MB 限制`;
+      return;
+    }
+
+    const name = `pack_${String(state.seq).padStart(2, '0')}.jpg`;
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+
+    state.seq++;
+    info.className = 'info ok';
+    info.textContent = `已导出 ${name} · ${(bytes / 1024).toFixed(0)} KB · JPEG`;
+  }
+
+  // ---------- 事件绑定 ----------
+  function bind() {
+    ['main', 'sub'].forEach(id => {
+      $(id).addEventListener('input', () => { syncFromUI(); render(); });
+    });
+    ['size', 'pos'].forEach(id => {
+      $(id).addEventListener('input', () => { syncFromUI(); render(); });
+    });
+    ['mainColor', 'subColor', 'stroke'].forEach(id => {
+      $(id).addEventListener('input', () => { syncFromUI(); render(); });
+    });
+    $('export').onclick = exportJpeg;
+    $('next').onclick = () => {
+      $('main').value = '';
+      $('main').focus();
+      syncFromUI(); render();
+      info.className = 'info';
+      info.textContent = `下一张将导出为 pack_${String(state.seq).padStart(2, '0')}.jpg`;
+    };
+
+    // 键盘：Ctrl/Cmd + S 导出
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault(); exportJpeg();
+      }
+    });
+  }
+
+  // ---------- 启动 ----------
+  renderBoards();
+  autoStrokeHint();
+  syncFromUI();
+  render();
+  bind();
+})();
+</script>
+</body>
+</html>
